@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Online Race FULL</title>
+<title>ONLINE RACE PRO</title>
 
 <script src="https://www.gstatic.com/firebasejs/12.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.13.0/firebase-auth-compat.js"></script>
@@ -11,7 +11,7 @@
 <style>
 body {
   margin:0;
-  background:#222;
+  background:#111;
   color:white;
   font-family:Arial;
   text-align:center;
@@ -21,36 +21,56 @@ body {
   width:300px;
   height:500px;
   margin:auto;
-  background:#444;
+  background:#222;
   position:relative;
   overflow:hidden;
-  border:2px solid white;
+  border:2px solid #fff;
 }
 
+/* 🛣️ road */
+.road-line {
+  position:absolute;
+  width:5px;
+  height:30px;
+  background:#fff3;
+  left:50%;
+}
+
+/* 🚗 car */
 #car {
   width:40px;
   height:60px;
-  background:red;
   position:absolute;
   bottom:0;
-  left:120px;
+  left:130px;
+  background:red;
+  border-radius:5px;
 }
 
+/* 👥 others */
 .other {
   width:40px;
   height:60px;
-  background:blue;
   position:absolute;
+  border-radius:5px;
 }
 
+/* 💬 chat */
 #chat {
   height:120px;
   overflow:auto;
-  background:#111;
+  background:#000;
   font-size:12px;
   text-align:left;
   padding:5px;
-  margin-top:10px;
+}
+
+/* 🏆 leaderboard */
+#board {
+  background:#000;
+  padding:10px;
+  font-size:12px;
+  margin-top:5px;
 }
 
 #fps {
@@ -59,31 +79,39 @@ body {
   right:10px;
   background:black;
   color:lime;
-  padding:5px 10px;
-  font-size:14px;
+  padding:5px;
 }
 </style>
 </head>
 <body>
 
-<div id="fps">FPS: 0</div>
+<div id="fps">FPS</div>
 
-<h2>🏁 ONLINE RACE FULL</h2>
+<h3>🏁 ONLINE RACE PRO</h3>
 
-<button onclick="login()">Google Giriş</button>
+<button onclick="login()">Google Login</button>
 <p id="info"></p>
+
+<!-- 🎨 SKIN -->
+<select id="skin" onchange="setSkin()">
+  <option value="red">Kırmızı</option>
+  <option value="blue">Mavi</option>
+  <option value="green">Yeşil</option>
+  <option value="yellow">Sarı</option>
+</select>
 
 <div id="game">
   <div id="car"></div>
 </div>
 
 <div id="chat"></div>
-
-<input id="msg" placeholder="mesaj yaz">
+<input id="msg">
 <button onclick="sendMsg()">Gönder</button>
 
+<div id="board">🏆 Leaderboard</div>
+
 <script>
-// 🔥 FIREBASE
+// 🔥 Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCtU_805TQ2wyIjsexFYoznJ2bRrb1aTQc",
   authDomain: "araba-oyunu-9cd7c.firebaseapp.com",
@@ -91,7 +119,6 @@ const firebaseConfig = {
   storageBucket: "araba-oyunu-9cd7c.firebasestorage.app",
   messagingSenderId: "135990124575",
   appId: "1:135990124575:web:7e442aba6ff9a71e18752a",
-  measurementId: "G-4VW84LNMEH"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -100,54 +127,64 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 let user;
-let x = 120;
-let y = 0;
-let nitro = false;
+let x=130, y=0;
+let skin="red";
 
-let roomId = prompt("Oda adı yaz:");
-if(!roomId) roomId = "default";
+let roomId = prompt("Oda adı:");
+if(!roomId) roomId="default";
 
 const room = db.collection("rooms").doc(roomId);
 
-// 🔑 LOGIN (FIXED)
+// 🔑 LOGIN
 function login(){
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithRedirect(provider);
+  auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider());
 }
 
-// redirect sonucu
-auth.getRedirectResult().then(r=>{
-  if(r.user) console.log("Giriş OK");
-}).catch(e=>console.log(e));
+// redirect
+auth.getRedirectResult().catch(()=>{});
 
 // 👤 USER
 auth.onAuthStateChanged(u=>{
   if(!u) return;
 
-  user = u;
-  document.getElementById("info").innerText = u.displayName;
+  user=u;
+  document.getElementById("info").innerText=u.displayName;
 
   join();
   listenPlayers();
   listenChat();
+  listenBoard();
 });
 
 // 🚗 JOIN
 function join(){
   room.collection("players").doc(user.uid).set({
     name:user.displayName,
-    x:120,
-    y:0
+    x,y,
+    skin
   });
 }
 
-// 🚗 UPDATE
+// 🎨 SKIN
+function setSkin(){
+  skin=document.getElementById("skin").value;
+  document.getElementById("car").style.background=skin;
+  update();
+}
+
+// 🚗 UPDATE (THROTTLED)
+let lastUpdate=0;
 function update(){
   if(!user) return;
 
+  let now=Date.now();
+  if(now-lastUpdate<100) return; // lag fix
+  lastUpdate=now;
+
   room.collection("players").doc(user.uid).set({
     name:user.displayName,
-    x,y
+    x,y,
+    skin
   });
 }
 
@@ -155,33 +192,29 @@ function update(){
 document.addEventListener("keydown",(e)=>{
   if(!user) return;
 
-  if(e.key==="ArrowLeft") x-=10;
-  if(e.key==="ArrowRight") x+=10;
-  if(e.key==="ArrowUp") y+=nitro?20:10;
+  if(e.key=="ArrowLeft") x-=10;
+  if(e.key=="ArrowRight") x+=10;
+  if(e.key=="ArrowUp") y+=15;
 
-  if(e.key==="Shift"){
-    nitro=true;
-    setTimeout(()=>nitro=false,2000);
-  }
-
-  drawCar();
+  draw();
   update();
   checkFinish();
 });
 
-// 🖌️ DRAW SELF CAR
-function drawCar(){
-  let car = document.getElementById("car");
-  car.style.left = x + "px";
-  car.style.bottom = y + "px";
+// 🖌️ DRAW
+function draw(){
+  let c=document.getElementById("car");
+  c.style.left=x+"px";
+  c.style.bottom=y+"px";
+  c.style.background=skin;
 }
 
-// 🏁 FINISH
+// 🏁 FINISH + SCORE
 function checkFinish(){
-  if(y >= 450){
+  if(y>=450){
     room.collection("finished").doc(user.uid).set({
       name:user.displayName,
-      time:Date.now()
+      score:Date.now()-startTime
     });
 
     room.collection("chat").add({
@@ -191,7 +224,9 @@ function checkFinish(){
   }
 }
 
-// 👥 PLAYERS
+let startTime=Date.now();
+
+// 👥 PLAYERS (SMOOTH)
 function listenPlayers(){
   room.collection("players")
   .onSnapshot(snap=>{
@@ -199,65 +234,78 @@ function listenPlayers(){
     document.querySelectorAll(".other").forEach(e=>e.remove());
 
     snap.forEach(d=>{
-      if(d.id === user.uid) return;
+      if(d.id==user.uid) return;
 
-      let p = d.data();
+      let p=d.data();
 
-      let div = document.createElement("div");
-      div.className = "other";
-      div.style.left = p.x + "px";
-      div.style.bottom = p.y + "px";
+      let div=document.createElement("div");
+      div.className="other";
+      div.style.left=p.x+"px";
+      div.style.bottom=p.y+"px";
+      div.style.background=p.skin || "blue";
 
       document.getElementById("game").appendChild(div);
     });
   });
 }
 
-// 💬 CHAT SEND
+// 💬 CHAT
 function sendMsg(){
-  if(!user) return;
-
-  let text = document.getElementById("msg").value;
-
   room.collection("chat").add({
     name:user.displayName,
-    text
+    text:msg.value
   });
 }
 
-// 💬 CHAT
 function listenChat(){
   room.collection("chat")
-  .onSnapshot(snap=>{
-    let c = document.getElementById("chat");
-    c.innerHTML = "";
-
-    snap.forEach(d=>{
-      let m = d.data();
-      c.innerHTML += `<div><b>${m.name}:</b> ${m.text}</div>`;
+  .onSnapshot(s=>{
+    chat.innerHTML="";
+    s.forEach(d=>{
+      let m=d.data();
+      chat.innerHTML+=`<div><b>${m.name}:</b> ${m.text}</div>`;
     });
-
-    c.scrollTop = c.scrollHeight;
   });
 }
 
-// FPS
-let fps=0,last=performance.now(),frames=0;
+// 🏆 LEADERBOARD
+function listenBoard(){
+  room.collection("finished")
+  .orderBy("score","asc")
+  .onSnapshot(s=>{
+    board.innerHTML="🏆 Leaderboard<br>";
+
+    s.forEach(d=>{
+      let p=d.data();
+      board.innerHTML+=`<div>${p.name} - ${p.score}ms</div>`;
+    });
+  });
+}
+
+// 🛣️ ROAD
+for(let i=0;i<10;i++){
+  let line=document.createElement("div");
+  line.className="road-line";
+  line.style.top=(i*60)+"px";
+  document.getElementById("game").appendChild(line);
+}
+
+// 🎮 FPS
+let fps=0,last=Date.now(),f=0;
 
 function loop(){
-  let now=performance.now();
-  frames++;
-
-  if(now-last>=1000){
-    fps=frames;
-    frames=0;
-    last=now;
-    document.getElementById("fps").innerText="FPS: "+fps;
+  f++;
+  if(Date.now()-last>1000){
+    fps=f;
+    f=0;
+    last=Date.now();
+    fps.innerText=fps;
   }
-
   requestAnimationFrame(loop);
 }
 loop();
+
+draw();
 </script>
 
 </body>
