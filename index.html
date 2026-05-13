@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>FINAL ONLINE RACE</title>
+
+<script src="https://www.gstatic.com/firebasejs/12.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore-compat.js"></script>
+
+<style>
+body { margin:0; background:#222; color:white; font-family:Arial; text-align:center; }
+
+#game {
+  width:300px;
+  height:500px;
+  margin:auto;
+  background:#444;
+  position:relative;
+  overflow:hidden;
+}
+
+.car {
+  width:40px;
+  height:60px;
+  background:red;
+  position:absolute;
+  bottom:0;
+}
+
+.other {
+  width:40px;
+  height:60px;
+  background:blue;
+  position:absolute;
+}
+
+#chat {
+  height:120px;
+  overflow:auto;
+  background:#111;
+  font-size:12px;
+  text-align:left;
+  padding:5px;
+}
+
+#fps {
+  position:fixed;
+  top:10px;
+  right:10px;
+  background:black;
+  color:lime;
+  padding:5px 10px;
+}
+</style>
+</head>
+<body>
+
+<div id="fps">FPS: 0</div>
+
+<h2>🏁 FINAL ONLINE RACE</h2>
+
+<button onclick="login()">Google Giriş</button>
+<p id="info"></p>
+
+<div id="game">
+  <div id="car"></div>
+</div>
+
+<div id="chat"></div>
+
+<input id="msg" placeholder="mesaj yaz">
+<button onclick="sendMsg()">Gönder</button>
+
+<script>
+// 🔥 FIREBASE CONFIG (SENİN VERDİĞİN)
+const firebaseConfig = {
+  apiKey: "AIzaSyCtU_805TQ2wyIjsexFYoznJ2bRrb1aTQc",
+  authDomain: "araba-oyunu-9cd7c.firebaseapp.com",
+  projectId: "araba-oyunu-9cd7c",
+  storageBucket: "araba-oyunu-9cd7c.firebasestorage.app",
+  messagingSenderId: "135990124575",
+  appId: "1:135990124575:web:7e442aba6ff9a71e18752a",
+  measurementId: "G-4VW84LNMEH"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let user;
+let roomId = prompt("Oda adı yaz:");
+const room = db.collection("rooms").doc(roomId);
+
+// 🔑 LOGIN
+function login(){
+  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+}
+
+// 👤 USER
+auth.onAuthStateChanged(u=>{
+  if(!u) return;
+  user = u;
+  document.getElementById("info").innerText = u.displayName;
+
+  join();
+  listenPlayers();
+  listenChat();
+});
+
+// 🚗 JOIN
+function join(){
+  room.collection("players").doc(user.uid).set({
+    name:user.displayName,
+    x:120,
+    y:0
+  });
+}
+
+// 🚗 MOVEMENT
+let x=120;
+let y=0;
+let nitro=false;
+
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="ArrowLeft") x-=10;
+  if(e.key==="ArrowRight") x+=10;
+  if(e.key==="ArrowUp") y+=nitro?20:10;
+
+  if(e.key==="Shift"){
+    nitro=true;
+    setTimeout(()=>nitro=false,2000);
+  }
+
+  update();
+  checkFinish();
+});
+
+// 🚗 UPDATE
+function update(){
+  if(!user) return;
+
+  room.collection("players").doc(user.uid).set({
+    name:user.displayName,
+    x,y
+  });
+}
+
+// 🏁 FINISH
+function checkFinish(){
+  if(y>=450){
+    room.collection("finished").doc(user.uid).set({
+      name:user.displayName,
+      time:Date.now()
+    });
+
+    room.collection("chat").add({
+      name:"SYSTEM",
+      text:user.displayName+" kazandı 🏁"
+    });
+  }
+}
+
+// 👥 PLAYERS
+function listenPlayers(){
+  room.collection("players")
+  .onSnapshot(snap=>{
+    document.querySelectorAll(".other").forEach(e=>e.remove());
+
+    snap.forEach(d=>{
+      if(d.id===user.uid) return;
+
+      let p=d.data();
+
+      let div=document.createElement("div");
+      div.className="other";
+      div.style.left=p.x+"px";
+      div.style.bottom=p.y+"px";
+      document.body.appendChild(div);
+    });
+  });
+}
+
+// 💬 CHAT SEND
+function sendMsg(){
+  room.collection("chat").add({
+    name:user.displayName,
+    text:document.getElementById("msg").value
+  });
+}
+
+// 💬 CHAT LISTEN
+function listenChat(){
+  room.collection("chat")
+  .onSnapshot(snap=>{
+    let c=document.getElementById("chat");
+    c.innerHTML="";
+    snap.forEach(d=>{
+      let m=d.data();
+      c.innerHTML+=`<div><b>${m.name}:</b> ${m.text}</div>`;
+    });
+  });
+}
+</script>
+
+<script>
+// 🎮 FPS COUNTER
+let fps=0,last=performance.now(),frames=0;
+
+function loop(){
+  let now=performance.now();
+  frames++;
+
+  if(now-last>=1000){
+    fps=frames;
+    frames=0;
+    last=now;
+    document.getElementById("fps").innerText="FPS: "+fps;
+  }
+
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+
+</body>
+</html>
