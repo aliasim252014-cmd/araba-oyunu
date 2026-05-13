@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Online Race</title>
+<title>Online Race FULL</title>
 
 <script src="https://www.gstatic.com/firebasejs/12.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.13.0/firebase-auth-compat.js"></script>
@@ -27,12 +27,13 @@ body {
   border:2px solid white;
 }
 
-.car {
+#car {
   width:40px;
   height:60px;
   background:red;
   position:absolute;
   bottom:0;
+  left:120px;
 }
 
 .other {
@@ -49,6 +50,7 @@ body {
   font-size:12px;
   text-align:left;
   padding:5px;
+  margin-top:10px;
 }
 
 #fps {
@@ -66,7 +68,7 @@ body {
 
 <div id="fps">FPS: 0</div>
 
-<h2>🏁 SILENT ONLINE RACE</h2>
+<h2>🏁 ONLINE RACE FULL</h2>
 
 <button onclick="login()">Google Giriş</button>
 <p id="info"></p>
@@ -81,7 +83,7 @@ body {
 <button onclick="sendMsg()">Gönder</button>
 
 <script>
-// 🔥 FIREBASE CONFIG
+// 🔥 FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyCtU_805TQ2wyIjsexFYoznJ2bRrb1aTQc",
   authDomain: "araba-oyunu-9cd7c.firebaseapp.com",
@@ -98,15 +100,27 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 let user;
+let x = 120;
+let y = 0;
+let nitro = false;
+
 let roomId = prompt("Oda adı yaz:");
+if(!roomId) roomId = "default";
+
 const room = db.collection("rooms").doc(roomId);
 
-// 🔑 LOGIN
+// 🔑 LOGIN (FIXED)
 function login(){
-  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithRedirect(provider);
 }
 
-// 👤 USER STATE
+// redirect sonucu
+auth.getRedirectResult().then(r=>{
+  if(r.user) console.log("Giriş OK");
+}).catch(e=>console.log(e));
+
+// 👤 USER
 auth.onAuthStateChanged(u=>{
   if(!u) return;
 
@@ -118,7 +132,7 @@ auth.onAuthStateChanged(u=>{
   listenChat();
 });
 
-// 🚗 JOIN ROOM
+// 🚗 JOIN
 function join(){
   room.collection("players").doc(user.uid).set({
     name:user.displayName,
@@ -127,26 +141,7 @@ function join(){
   });
 }
 
-// 🚗 MOVEMENT (SES YOK)
-let x=120;
-let y=0;
-let nitro=false;
-
-document.addEventListener("keydown",(e)=>{
-  if(e.key==="ArrowLeft") x-=10;
-  if(e.key==="ArrowRight") x+=10;
-  if(e.key==="ArrowUp") y+=nitro?20:10;
-
-  if(e.key==="Shift"){
-    nitro=true;
-    setTimeout(()=>nitro=false,2000);
-  }
-
-  update();
-  checkFinish();
-});
-
-// 🚗 UPDATE PLAYER
+// 🚗 UPDATE
 function update(){
   if(!user) return;
 
@@ -156,9 +151,34 @@ function update(){
   });
 }
 
-// 🏁 FINISH SYSTEM
+// 🎮 MOVE
+document.addEventListener("keydown",(e)=>{
+  if(!user) return;
+
+  if(e.key==="ArrowLeft") x-=10;
+  if(e.key==="ArrowRight") x+=10;
+  if(e.key==="ArrowUp") y+=nitro?20:10;
+
+  if(e.key==="Shift"){
+    nitro=true;
+    setTimeout(()=>nitro=false,2000);
+  }
+
+  drawCar();
+  update();
+  checkFinish();
+});
+
+// 🖌️ DRAW SELF CAR
+function drawCar(){
+  let car = document.getElementById("car");
+  car.style.left = x + "px";
+  car.style.bottom = y + "px";
+}
+
+// 🏁 FINISH
 function checkFinish(){
-  if(y>=450){
+  if(y >= 450){
     room.collection("finished").doc(user.uid).set({
       name:user.displayName,
       time:Date.now()
@@ -171,50 +191,57 @@ function checkFinish(){
   }
 }
 
-// 👥 PLAYERS LISTENER
+// 👥 PLAYERS
 function listenPlayers(){
   room.collection("players")
   .onSnapshot(snap=>{
+
     document.querySelectorAll(".other").forEach(e=>e.remove());
 
     snap.forEach(d=>{
-      if(d.id===user.uid) return;
+      if(d.id === user.uid) return;
 
-      let p=d.data();
-      let div=document.createElement("div");
-      div.className="other";
-      div.style.left=p.x+"px";
-      div.style.bottom=p.y+"px";
-      document.body.appendChild(div);
+      let p = d.data();
+
+      let div = document.createElement("div");
+      div.className = "other";
+      div.style.left = p.x + "px";
+      div.style.bottom = p.y + "px";
+
+      document.getElementById("game").appendChild(div);
     });
   });
 }
 
 // 💬 CHAT SEND
 function sendMsg(){
+  if(!user) return;
+
+  let text = document.getElementById("msg").value;
+
   room.collection("chat").add({
     name:user.displayName,
-    text:document.getElementById("msg").value
+    text
   });
 }
 
-// 💬 CHAT LISTENER
+// 💬 CHAT
 function listenChat(){
   room.collection("chat")
   .onSnapshot(snap=>{
-    let c=document.getElementById("chat");
-    c.innerHTML="";
+    let c = document.getElementById("chat");
+    c.innerHTML = "";
 
     snap.forEach(d=>{
-      let m=d.data();
-      c.innerHTML+=`<div><b>${m.name}:</b> ${m.text}</div>`;
+      let m = d.data();
+      c.innerHTML += `<div><b>${m.name}:</b> ${m.text}</div>`;
     });
+
+    c.scrollTop = c.scrollHeight;
   });
 }
-</script>
 
-<script>
-// 🎮 FPS COUNTER
+// FPS
 let fps=0,last=performance.now(),frames=0;
 
 function loop(){
